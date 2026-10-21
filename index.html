@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dezimalzahlen am Quadrat</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="buehne">
+    <canvas id="flaeche" aria-label="Quadrate mit Einteilung in Zehntel, Hundertstel, Tausendstel und Zehntausendstel"></canvas>
+    <canvas id="strahl" hidden aria-label="Zahlenstrahl mit Strichen für Zehntel, Hundertstel, Tausendstel und Zehntausendstel"></canvas>
+
+    <div class="header">
+      <h1>Dezimalzahlen am Quadrat</h1>
+      <p id="untertitel">Ein Quadrat ist ein Ganzes.</p>
+    </div>
+
+    <div class="zoomleiste">
+      <button id="zoomIn" type="button" aria-label="Hineinzoomen">+</button>
+      <button id="zoomOut" type="button" aria-label="Herauszoomen">−</button>
+      <button id="uebersichtBtn" type="button">Übersicht</button>
+      <button id="lupeBtn" type="button" aria-pressed="false">🔍 Lupe</button>
+    </div>
+
+    <p class="hint" id="hinweis"></p>
+  </div>
+
+  <aside class="panel">
+    <section>
+      <h2>Darstellung</h2>
+      <div class="segmented" role="group" aria-label="Darstellung">
+        <button type="button" data-darstellung="quadrat">Quadrat</button>
+        <button type="button" data-darstellung="strahl">Zahlenstrahl</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Zahl</h2>
+      <p class="zahl" id="zahlAnzeige" aria-live="polite"></p>
+      <p class="zerlegung" id="zerlegung"></p>
+      <form id="eingabeForm" class="eingabe">
+        <input id="eingabe" type="text" inputmode="decimal" autocomplete="off" placeholder="z. B. 0,347" aria-label="Zahl eingeben" />
+        <button type="submit">Darstellen</button>
+      </form>
+      <p class="fehler" id="fehler" role="alert"></p>
+    </section>
+
+    <section>
+      <h2>Stellenwerttafel</h2>
+      <button id="tafelBtn" class="umschalter" type="button" aria-pressed="false">Stellenwerttafel einblenden</button>
+      <div id="tafelBereich" hidden>
+        <div class="tafel" id="stellenwerttafel"></div>
+        <p class="status" id="tafelHinweis"></p>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="quadrateTitel">Quadrate</h2>
+      <div class="segmented" role="group" aria-label="Anzahl der Quadrate">
+        <button type="button" data-quadrate="1">1</button>
+        <button type="button" data-quadrate="2">2</button>
+        <button type="button" data-quadrate="3">3</button>
+      </div>
+      <h2 class="unter" id="einteilungTitel">Einteilung</h2>
+      <div class="segmented" role="group" aria-label="Einteilung" id="einteilungWahl">
+        <button type="button" data-einteilung="rechtecke">Rechtecke (5 × 2)</button>
+        <button type="button" data-einteilung="streifen">Streifen</button>
+      </div>
+      <button id="nullBtn" type="button">Zurücksetzen (0)</button>
+    </section>
+  </aside>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
