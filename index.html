@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Dezimalzahlen am Quadrat</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
@@ -26,7 +26,10 @@
     <p class="hint" id="hinweis"></p>
     <!-- Am Zahlenstrahl: Zahl und (per Knopf) Stellenwerttafel direkt über dem Strahl -->
     <div class="obenLeiste" id="obenLeiste" hidden>
-      <p class="zahl zahlOben" id="zahlOben" aria-hidden="true" title="Verschieben: ziehen · Doppelklick: zurück an den Platz"></p>
+      <div class="zahl zahlOben" id="zahlOben" title="Verschieben: ziehen · ↺ bzw. Doppelklick: zurück an den Platz">
+        <span id="zahlObenText" aria-hidden="true"></span>
+        <button id="zahlZurueck" class="zurueck" type="button" hidden aria-label="Zahlfeld zurück an seinen Platz">↺</button>
+      </div>
       <div class="tafelOben" id="tafelOben" hidden></div>
     </div>
   </div>

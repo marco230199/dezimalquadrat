@@ -51,6 +51,11 @@ Stufe in ihrer Farbe – passend zur Stellenwerttafel.
   Zehntausendstel. **Lupe**: Antippen zoomt auf das angetippte Hundertstel. Beim Hineinzoomen zeigt
   eine kleine Übersichtskarte, wo man gerade ist.
 - Hochformat (Tablet): Bedienfeld unten
+- **iPad / Tablet:** Statt der Bildschirmtastatur (die den halben Bildschirm verdeckt) erscheint ein eigenes
+  Ziffernfeld direkt am Eingabefeld (Ziffern, Komma, −, /, Leerzeichen für gemischte Zahlen, ⌫, OK) bzw. an
+  der Stellenwerttafel (0–9, nach jeder Ziffer weiter zur nächsten Stelle). Das verschobene Zahlfeld kommt mit ↺
+  zurück. Die Seite selbst zoomt nicht mit (kein Doppeltipp-/Zwei-Finger-Zoom), langes Drücken markiert
+  nichts; Tippflächen mindestens 44 px. (`js/tastenfeld.js`)
 
 ## Starten
 
@@ -70,7 +75,8 @@ Stufe in ihrer Farbe – passend zur Stellenwerttafel.
 │   ├── state.js       # Zustand, Farben der Stellenwerte
 │   ├── ansicht.js     # Quadrat: Zeichenfläche, Zoom, Verschieben, Antippen, Übersichtskarte
 │   ├── strahl.js      # Zahlenstrahl −3 … 3: Einteilung, Markierung, Zoom, Verschieben, Antippen, Übersichtskarte
-│   └── bedienfeld.js  # Zahlanzeige, Eingabe, Stellenwerttafel, Anzahl der Quadrate
+│   ├── bedienfeld.js  # Zahlanzeige, Eingabe, Stellenwerttafel, Anzahl der Quadrate
+│   └── tastenfeld.js  # eigenes Ziffernfeld für iPad / Tablet
 ├── tests/zahl.test.mjs
 └── package.json
 ```

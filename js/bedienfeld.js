@@ -6,6 +6,7 @@ import { STUFEN, STELLEN, MINUS, ziffern, bruchText, nachkommastellen, lies, zer
 import { state, FARBEN, STRAHL_STELLEN } from './state.js';
 import * as Quadrat from './ansicht.js';
 import * as Strahl from './strahl.js';
+import { touch, zeigeTasten, verschiebeZu, schliesseTasten } from './tastenfeld.js';
 
 /** Die gerade sichtbare Darstellung (Zoom, Übersicht, Antippen) */
 const ansicht = () => (state.strahl ? Strahl : Quadrat);
@@ -61,7 +62,7 @@ const spalten = STUFEN.map((stufe, k) => {
   feld.type = 'text';
   feld.inputMode = 'numeric';
   feld.autocomplete = 'off';
-  feld.readOnly = TAFEL_GEKOPPELT;
+  feld.readOnly = TAFEL_GEKOPPELT || touch;       // iPad: eigenes Ziffernfeld statt Bildschirmtastatur
   feld.setAttribute('aria-label', `${stufe.name}: Ziffer eintragen`);
   feld.style.color = FARBEN[k].schrift;
   ziffer.appendChild(feld);
@@ -82,6 +83,7 @@ const spalten = STUFEN.map((stufe, k) => {
 const sichtbareFelder = () => spalten.filter(s => !s.el.hidden).map(s => s.feld);
 spalten.forEach((s, k) => {
   s.feld.addEventListener('focus', () => s.feld.select());
+  s.feld.addEventListener('click', () => { if (touch && !TAFEL_GEKOPPELT) zifferTasten(k); });
   s.feld.addEventListener('input', () => {
     const d = s.feld.value.replace(/\D/g, '').slice(-1);
     if (d === '') { auffrischen(); return; }
@@ -134,7 +136,7 @@ function auffrischen() {
   // Verdeckt (eingegeben, noch nicht markiert): nur die Eingabe zeigen, nicht die Dezimalzahl und ihre Zerlegung
   $('zahlAnzeige').innerHTML = state.bruch ? bruchHtml(state.bruch) + (verdeckt ? '' : ' = ' + zahlHtml(n)) : zahlHtml(n);
   $('zahlAnzeige').classList.toggle('mitBruch', !!state.bruch);
-  $('zahlOben').innerHTML = `<span>${$('zahlAnzeige').innerHTML}</span>`;   // dieselbe Zahl über dem Zahlenstrahl
+  $('zahlObenText').innerHTML = $('zahlAnzeige').innerHTML;      // dieselbe Zahl über dem Zahlenstrahl
   $('zahlOben').classList.toggle('mitBruch', !!state.bruch);
   const klein = inKleinsterEinheit(n);
   $('zerlegung').textContent = verdeckt ? 'Wo liegt diese Zahl auf dem Zahlenstrahl?'
@@ -247,7 +249,14 @@ function hinweiseStrahl(fein) {
 function zahlfeldVerschiebbar() {
   const el = $('zahlOben'), buehne = document.querySelector('.buehne');
   let versatz = { x: 0, y: 0 }, ziehen = null;
-  const setzen = () => { el.style.transform = `translate(${versatz.x}px, ${versatz.y}px)`; };
+  const zurueck = $('zahlZurueck');
+  const setzen = () => {
+    el.style.transform = `translate(${versatz.x}px, ${versatz.y}px)`;
+    zurueck.hidden = versatz.x === 0 && versatz.y === 0;
+  };
+  const zuruecksetzen = () => { versatz = { x: 0, y: 0 }; setzen(); };
+  zurueck.addEventListener('pointerdown', e => e.stopPropagation());   // Knopf startet kein Ziehen
+  zurueck.addEventListener('click', zuruecksetzen);
   el.addEventListener('pointerdown', e => {
     el.setPointerCapture(e.pointerId);
     const r = el.getBoundingClientRect();
@@ -267,11 +276,61 @@ function zahlfeldVerschiebbar() {
   const ende = () => { ziehen = null; el.classList.remove('zieht'); };
   el.addEventListener('pointerup', ende);
   el.addEventListener('pointercancel', ende);
-  el.addEventListener('dblclick', () => { versatz = { x: 0, y: 0 }; setzen(); });
+  el.addEventListener('dblclick', zuruecksetzen);
+}
+
+// ---------------- iPad: eigene Ziffernfelder statt Bildschirmtastatur (siehe tastenfeld.js)
+
+/** Stellenwerttafel: Stelle k antippen → Ziffern 0 … 9; nach einer Ziffer weiter zur nächsten Stelle */
+function zifferTasten(k) {
+  const zeigeStelle = j => {
+    spalten.forEach((s, i) => s.feld.classList.toggle('aktiv', i === j));
+    k = j;
+  };
+  const d = n => ({ text: String(n), wert: n });
+  zeigeTasten(spalten[k].feld, [
+    [1, 2, 3, 4, 5].map(d), [6, 7, 8, 9, 0].map(d),
+    [{ text: '◀', wert: 'links' }, { text: '▶', wert: 'rechts' }, { text: 'Fertig', wert: 'fertig', breit: 2, klasse: 'ok' }],
+  ], w => {
+    const felder = spalten.filter(s => !s.el.hidden), i = felder.indexOf(spalten[k]);
+    const gehe = j => { zeigeStelle(spalten.indexOf(felder[j])); verschiebeZu(felder[j].feld); };
+    if (typeof w === 'number') {
+      tafelZiffer(k, w);
+      if (i + 1 < felder.length) gehe(i + 1); else fertig();
+    } else if (w === 'links' && i > 0) gehe(i - 1);
+    else if (w === 'rechts' && i + 1 < felder.length) gehe(i + 1);
+    else if (w === 'fertig') schliesseTasten();
+  }, () => spalten.forEach(s => s.feld.classList.remove('aktiv')));
+  zeigeStelle(k);                            // erst nach zeigeTasten: das schließt ein evtl. offenes Feld
+  const fertig = schliesseTasten;
+}
+
+/** Eingabefeld: Ziffern, Komma, Minus, Bruchstrich, Leerzeichen (gemischte Zahl), ⌫ und OK */
+function eingabeTasten() {
+  const feld = $('eingabe');
+  let ersetzen = true;                       // erste Taste ersetzt die alte Eingabe (wie markierter Text)
+  const t = (text, wert = text, extra = {}) => ({ text, wert, ...extra });
+  zeigeTasten(feld, [
+    [t('7'), t('8'), t('9'), t('⌫', 'zurueck')],
+    [t('4'), t('5'), t('6'), t('/')],
+    [t('1'), t('2'), t('3'), t(',')],
+    [t('−', '-'), t('0'), t('Leer', ' '), t('OK', 'ok', { klasse: 'ok' })],
+  ], w => {
+    if (w === 'ok') { schliesseTasten(); $('eingabeForm').requestSubmit(); return; }
+    if (w === 'zurueck') feld.value = ersetzen ? '' : feld.value.slice(0, -1);
+    else feld.value = (ersetzen ? '' : feld.value) + w;
+    ersetzen = false;
+    $('fehler').textContent = '';
+  }, () => feld.classList.remove('aktiv'));
+  feld.classList.add('aktiv');
 }
 
 export function initBedienfeld() {
   zahlfeldVerschiebbar();
+  if (touch) {
+    $('eingabe').readOnly = true;
+    $('eingabe').addEventListener('click', eingabeTasten);
+  }
   state.beiAenderung(auffrischen);
   $('eingabeForm').addEventListener('submit', e => {
     e.preventDefault();
