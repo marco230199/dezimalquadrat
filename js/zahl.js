@@ -2,7 +2,7 @@
 // Zahl und Einteilung des Quadrats (ohne Zeichnen, testbar mit node --test)
 //
 // Die Zahl wird als ganze Zahl von Zehntausendsteln gespeichert (n = 3470 bedeutet 0,347),
-// damit beim Rechnen keine Rundungsfehler entstehen.
+// damit beim Rechnen keine Rundungsfehler entstehen. Negative Zahlen (nur am Zahlenstrahl): n < 0.
 //
 // Einteilung eines Quadrats (Seitenlänge 1, y nach unten). Jedes Teil wird in 10 gleiche Teile zerlegt;
 // ein Quadrat lässt sich nicht in 10 gleiche Quadrate teilen, daher wechseln sich Quadrate und Rechtecke ab.
@@ -23,8 +23,12 @@ export const STUFEN = [
   { name: 'Zehntausendstel', kurz: 'zt', einzahl: 'Zehntausendstel' },
 ];
 
-/** Ziffern der Zahl: ganze Zahl und die Nachkommaziffern [z, h, t, zt] */
+export const MINUS = '−';
+
+/** Ziffern des Betrags der Zahl: ganze Zahl und die Nachkommaziffern [z, h, t, zt]; negativ: Vorzeichen */
 export function ziffern(n) {
+  const negativ = n < 0;
+  n = Math.abs(n);
   const ganze = Math.floor(n / EINHEIT);
   let rest = n - ganze * EINHEIT;
   const nach = [];
@@ -33,7 +37,7 @@ export function ziffern(n) {
     nach.push(Math.floor(rest / p));
     rest %= p;
   }
-  return { ganze, nach };
+  return { ganze, nach, negativ };
 }
 
 /** Zahl aus Ziffern */
@@ -53,25 +57,56 @@ export function nachkommastellen(n) {
 export function alsText(n, mindestens = 0) {
   const { ganze, nach } = ziffern(n);
   const k = Math.max(nachkommastellen(n), mindestens);
-  return k === 0 ? String(ganze) : `${ganze},${nach.slice(0, k).join('')}`;
+  const v = n < 0 ? MINUS : '';
+  return k === 0 ? v + ganze : `${v}${ganze},${nach.slice(0, k).join('')}`;
 }
 
 /**
- * Text einlesen („0,347“, „0.347“, „,5“, „2“). Ergebnis { n } oder { fehler }.
- * max: größte erlaubte Zahl (in Zehntausendsteln).
+ * Text einlesen („0,347“, „0.347“, „,5“, „2“, „-1,5“ oder Brüche „1/10“, „-3/4“, „1 1/2“).
+ * Ergebnis { n } bzw. bei Brüchen { n, bruch: { negativ, ganze, zaehler, nenner } } oder { fehler }.
+ * max, min: größte und kleinste erlaubte Zahl (in Zehntausendsteln); stellen: höchstens so viele Nachkommastellen.
  */
-export function lies(text, max) {
-  const t = String(text).trim().replace(/\s/g, '').replace('.', ',');
+export function lies(text, max, min = 0, stellen = STELLEN) {
+  const roh = String(text).trim().replace(/^[−–]/, '-').replace(/\s+/g, ' ');
+  const mb = roh.match(/^([+-]?) ?(?:(\d+) )?(\d+) ?\/ ?(\d+)$/);
+  if (mb) return liesBruch(mb, max, min, stellen);
+  const t = String(text).trim().replace(/\s/g, '').replace('.', ',').replace(/^[−–]/, '-');
   if (t === '') return { fehler: 'Bitte eine Zahl eingeben.' };
-  const m = t.match(/^(\d*)(?:,(\d*))?$/);
-  if (!m || (m[1] === '' && !m[2])) return { fehler: 'Das ist keine Dezimalzahl. Beispiel: 0,347' };
-  const nachText = m[2] ?? '';
-  if (nachText.replace(/0+$/, '').length > STELLEN) {
-    return { fehler: `Höchstens ${STELLEN} Nachkommastellen (bis zu den Zehntausendsteln).` };
+  const m = t.match(/^([+-]?)(\d*)(?:,(\d*))?$/);
+  if (!m || (m[2] === '' && !m[3])) return { fehler: 'Das ist keine Dezimalzahl. Beispiel: 0,347' };
+  const nachText = m[3] ?? '';
+  if (nachText.replace(/0+$/, '').length > stellen) {
+    return { fehler: `Höchstens ${stellen} Nachkommastellen (bis zu den ${STUFEN[stellen].name}n).` };
   }
-  const ganze = m[1] === '' ? 0 : Number(m[1]);
+  const ganze = m[2] === '' ? 0 : Number(m[2]);
   const nach = (nachText + '0'.repeat(STELLEN)).slice(0, STELLEN).split('').map(Number);
-  const n = ausZiffern(ganze, nach);
+  return imBereich((m[1] === '-' ? -1 : 1) * ausZiffern(ganze, nach), max, min);
+}
+
+/** Bruch (Treffer der Bruch-Erkennung in lies) einlesen; nur Brüche mit endlicher Dezimaldarstellung */
+function liesBruch([, vz, g, z, nn], max, min, stellen) {
+  const ganze = g ? Number(g) : 0, zaehler = Number(z), nenner = Number(nn);
+  if (nenner === 0) return { fehler: 'Durch 0 kann man nicht teilen.' };
+  const bruch = { negativ: vz === '-', ganze, zaehler, nenner };
+  const betrag = (ganze * nenner + zaehler) * EINHEIT / nenner;
+  if (!Number.isInteger(betrag) || betrag % 10 ** (STELLEN - stellen) !== 0) {
+    return { fehler: `${bruchText(bruch)} lässt sich nicht als Dezimalzahl mit höchstens ${stellen} Nachkommastellen schreiben.` };
+  }
+  const r = imBereich((bruch.negativ ? -1 : 1) * betrag, max, min);
+  return r.fehler ? r : { n: r.n, bruch };
+}
+
+/** Bruch als Text, z. B. „−1 3/4“ */
+export function bruchText(b) {
+  return `${b.negativ ? MINUS : ''}${b.ganze ? b.ganze + ' ' : ''}${b.zaehler}/${b.nenner}`;
+}
+
+/** Liegt n im erlaubten Bereich? Ergebnis { n } oder { fehler } */
+function imBereich(n, max, min) {
+  if (min < 0 && (n < min || n > max)) {
+    return { fehler: `Die Zahl muss zwischen ${alsText(min)} und ${alsText(max)} liegen.` };
+  }
+  if (n < min) return { fehler: 'Negative Zahlen gibt es nur am Zahlenstrahl.' };
   if (n > max) return { fehler: `Die Zahl ist zu groß: Es gibt nur ${max / EINHEIT} ${max === EINHEIT ? 'Quadrat' : 'Quadrate'}.` };
   return { n };
 }
@@ -138,8 +173,9 @@ export function zahlBeiPunkt(q, x, y, k, bisher, art = 'streifen') {
   return n;
 }
 
-/** Zerlegung in Stellenwerte, z. B. „3 Zehntel + 4 Hundertstel + 7 Tausendstel“ */
+/** Zerlegung in Stellenwerte, z. B. „3 Zehntel + 4 Hundertstel + 7 Tausendstel“ (negativ: „−(…)“) */
 export function zerlegung(n) {
+  if (n < 0) return `${MINUS}(${zerlegung(-n)})`;
   const { ganze, nach } = ziffern(n);
   const teile = [];
   if (ganze > 0) teile.push(`${ganze} ${ganze === 1 ? 'Ganzes' : 'Ganze'}`);
@@ -151,6 +187,6 @@ export function zerlegung(n) {
 export function inKleinsterEinheit(n) {
   const k = nachkommastellen(n);
   if (k === 0) return null;
-  const anzahl = n / 10 ** (STELLEN - k);
-  return `${anzahl} ${STUFEN[k].name}`;
+  const anzahl = Math.abs(n) / 10 ** (STELLEN - k);
+  return `${n < 0 ? MINUS : ''}${anzahl} ${STUFEN[k].name}`;
 }

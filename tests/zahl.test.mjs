@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { ziffern, alsText, lies, flaechen, zahlBeiPunkt, zerlegung, inKleinsterEinheit, teilGroesse, EINHEIT } from '../js/zahl.js';
 
 test('Ziffern und Text', () => {
-  assert.deepEqual(ziffern(3470), { ganze: 0, nach: [3, 4, 7, 0] });
-  assert.deepEqual(ziffern(12505), { ganze: 1, nach: [2, 5, 0, 5] });
+  assert.deepEqual(ziffern(3470), { ganze: 0, nach: [3, 4, 7, 0], negativ: false });
+  assert.deepEqual(ziffern(12505), { ganze: 1, nach: [2, 5, 0, 5], negativ: false });
   assert.equal(alsText(3470), '0,347');
   assert.equal(alsText(0), '0');
   assert.equal(alsText(20000), '2');
@@ -90,4 +90,36 @@ test('Rechtecke: Antippen', () => {
   assert.equal(zahlBeiPunkt(0, 0.65, 0.15, 2, 0, 'rechtecke'), 3300);
   // ein Tausendstel im ersten Hundertstel
   assert.equal(zahlBeiPunkt(0, 0.005, 0.01, 3, 0, 'rechtecke'), 10);
+});
+
+test('Negative Zahlen (Zahlenstrahl von −3 bis 3, bis Tausendstel)', () => {
+  assert.deepEqual(ziffern(-13500), { ganze: 1, nach: [3, 5, 0, 0], negativ: true });
+  assert.equal(alsText(-13500), '−1,35');
+  assert.equal(alsText(-30000), '−3');
+  assert.deepEqual(lies('-1,35', 30000, -30000, 3), { n: -13500 });
+  assert.deepEqual(lies('−0,5', 30000, -30000, 3), { n: -5000 });
+  assert.deepEqual(lies('2,999', 30000, -30000, 3), { n: 29990 });
+  assert.ok(lies('-3,1', 30000, -30000, 3).fehler);
+  assert.ok(lies('0,1234', 30000, -30000, 3).fehler);     // nur bis Tausendstel
+  assert.ok(lies('-0,5', EINHEIT).fehler);                // am Quadrat keine negativen Zahlen
+  assert.equal(zerlegung(-13500), '−(1 Ganzes + 3 Zehntel + 5 Hundertstel)');
+  assert.equal(inKleinsterEinheit(-13500), '−135 Hundertstel');
+});
+
+test('Brüche eingeben', async () => {
+  const { bruchText } = await import('../js/zahl.js');
+  const r = lies('1/10', 30000, -30000, 3);
+  assert.equal(r.n, 1000);
+  assert.deepEqual(r.bruch, { negativ: false, ganze: 0, zaehler: 1, nenner: 10 });
+  assert.equal(lies('-3/4', 30000, -30000, 3).n, -7500);
+  assert.equal(lies('− 3 / 4', 30000, -30000, 3).n, -7500);
+  assert.equal(lies('1 1/2', 30000, -30000, 3).n, 15000);
+  assert.equal(lies('7/4', 30000, -30000, 3).n, 17500);
+  assert.equal(bruchText(lies('-1 3/8', 30000, -30000, 3).bruch), '−1 3/8');
+  assert.ok(lies('1/3', 30000, -30000, 3).fehler);          // keine endliche Dezimalzahl
+  assert.ok(lies('1/16', 30000, -30000, 3).fehler);         // 0,0625: zu viele Stellen am Zahlenstrahl
+  assert.equal(lies('1/16', EINHEIT).n, 625);               // am Quadrat bis Zehntausendstel
+  assert.ok(lies('1/0', 30000, -30000, 3).fehler);
+  assert.ok(lies('7/2', 30000, -30000, 3).fehler);          // 3,5 > 3
+  assert.ok(lies('-1/2', EINHEIT).fehler);                  // am Quadrat nicht negativ
 });

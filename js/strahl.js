@@ -1,36 +1,48 @@
 // ------------------------------------------------------------------
-// Zahlenstrahl: dieselbe Zahl wie im Quadrat, als farbiger Balken ab 0 und Markierung.
-// Striche für Ganze, Zehntel, Hundertstel, Tausendstel, Zehntausendstel – feinere erst beim Hineinzoomen.
-// Bedienung wie beim Quadrat: Mausrad / zwei Finger zoomen, Ziehen verschiebt, Antippen setzt die Zahl
-// auf den nächsten Strich (oder zoomt mit der Lupe). Welt-Koordinate x = Zahlwert.
+// Zahlenstrahl von −3 bis 3 zum Einführen der Dezimalbrüche.
+// Anfangs nur ganze Zahlen; per Knopf wird die Einteilung feiner (Zehntel, Hundertstel, Tausendstel),
+// jede Stufe in ihrer Farbe. Zu enge Striche erscheinen erst beim Hineinzoomen. Nur ganze Zahlen sind
+// beschriftet. Per Knopf erscheint die Zahl als dicke Strecke ab 0 auf der Achse: erst die Ganzen in ihrer
+// Farbe, dann die Zehntel, Hundertstel, Tausendstel (1,529: bis 1, dann bis 1,5, bis 1,52, bis 1,529). Antippen markiert den nächsten Strich der feinsten sichtbaren Stufe (oder zoomt mit der Lupe).
+// Bedienung: Mausrad / zwei Finger zoomen, Ziehen verschiebt. Welt-Koordinate x = Zahlwert.
 // ------------------------------------------------------------------
-import { ziffern, alsText, EINHEIT, STELLEN } from './zahl.js';
-import { state, FARBEN } from './state.js';
+import { alsText, ziffern, EINHEIT, MINUS } from './zahl.js';
+import { state, FARBEN, STRAHL_BIS } from './state.js';
 
 const MIN_PX = 7, VOLL_PX = 16;              // Strichabstand, ab dem eine Stufe erscheint bzw. voll da ist
-const TIPP_PX = 18;                          // Strichabstand, ab dem man eine Stufe antippen kann
-const STRICH = [44, 30, 20, 13, 8];          // Strichlänge je Stufe (Pixel, nach oben und unten)
-const LINIE = [3, 2.2, 1.6, 1.2, 0.9];
+const TIPP_PX = 12;                          // Strichabstand, ab dem man eine Stufe antippen kann
+const STRICH = [40, 28, 19, 12];             // Strichlänge je Stufe (Pixel, nach oben und unten)
+const LINIE = [3, 2.2, 1.6, 1.2];
+const EINBLENDEN_S = 1.6;                    // Dauer des langsamen Einblendens (Sekunden)
+const A = -STRAHL_BIS, B = STRAHL_BIS;       // Bereich des Zahlenstrahls
 
 const cv = document.getElementById('strahl');
 const ctx = cv.getContext('2d');
 let W = 0, H = 0, dpr = 1;
 const kamera = { s: 100, ox: 0 };            // Bildschirm-x = Zahl · s + ox
 let animation = null, neuZeichnen = true, onAendern = () => {};
+let einblendung = null;                      // { k, t0 }: Striche der Stufe k werden gerade eingeblendet
+let tippStrecke = null;                      // angetippter Strich (Zehntausendstel): Strecke ab 0 dorthin, Zahl bleibt
 
-const achseY = () => H * 0.58;
-const RAND = 60;
+// Höhe der Achse: unter Zahl und Stellenwerttafel (mit Platz für die Markierung), sonst etwa mittig
+const obenLeiste = document.getElementById('obenLeiste');
+function achseY() {
+  if (obenLeiste.hidden) return H * 0.55;
+  const unten = obenLeiste.offsetTop + obenLeiste.offsetHeight;
+  return Math.max(H * 0.55, Math.min(H - 110, unten + 125));
+}
+const RAND = 50;
 
 // ---------------- Kamera
 function passend() {
-  const s = (W - 2 * RAND) / state.quadrate;
-  return { s, ox: RAND };
+  const s = (W - 2 * RAND) / (B - A);
+  return { s, ox: RAND - A * s };
 }
-const sMin = () => passend().s * 0.6;
-const sMax = () => W / 0.002;                // zwei Tausendstel füllen das Bild
+const sMin = () => passend().s * 0.8;
+const sMax = () => W / 0.004;                // vier Tausendstel füllen das Bild
 function begrenzen(k) {
   k.s = Math.min(sMax(), Math.max(sMin(), k.s));
-  k.ox = Math.min(W - 40, Math.max(40 - state.quadrate * k.s, k.ox));
+  k.ox = Math.min(W - 40 - A * k.s, Math.max(40 - B * k.s, k.ox));
   return k;
 }
 function fahreZu(ziel, dauer = 0.45) {
@@ -54,11 +66,22 @@ function zeige(a, b) {
 
 const abstandPx = k => 10 ** -k * kamera.s;
 const deckkraft = k => (k === 0 ? 1 : Math.max(0, Math.min(1, (abstandPx(k) - MIN_PX) / (VOLL_PX - MIN_PX))));
-/** Feinste Stufe, deren Striche weit genug auseinander liegen, um sie anzutippen */
+/** Feinste eingestellte Stufe, deren Striche weit genug auseinander liegen, um sie anzutippen */
 export function feinsteStufe() {
-  let k = 1;
-  for (let s = 2; s <= STELLEN; s++) if (abstandPx(s) >= TIPP_PX) k = s;
+  let k = 0;
+  for (let s = 1; s <= state.skala; s++) if (abstandPx(s) >= TIPP_PX) k = s;
   return k;
+}
+/** Ist die eingestellte Einteilung so fein, dass man erst hineinzoomen muss? */
+export const zuEng = () => feinsteStufe() < state.skala;
+
+/** Einteilung um eine Stufe feiner (+1) oder gröber (−1) */
+export function verfeinern(schritt) {
+  const k = Math.max(0, Math.min(3, state.skala + schritt));
+  if (k === state.skala) return;
+  state.skala = k;
+  einblendung = schritt > 0 ? { k, t0: performance.now() } : null;   // neue Striche wachsen langsam heraus
+  anfordern();
 }
 
 // ---------------- Zeichnen
@@ -68,48 +91,38 @@ function groesse() {
   cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
 }
 
-function zeichnen() {
+function zeichnen(now) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
   if (W === 0) return;
   const y0 = achseY(), S = kamera.s, X = v => kamera.ox + v * S;
-  const v0 = Math.max(0, -kamera.ox / S), v1 = Math.min(state.quadrate, (W - kamera.ox) / S);
+  const v0 = Math.max(A, -kamera.ox / S), v1 = Math.min(B, (W - kamera.ox) / S);
 
-  // Farbiger Balken über der Achse: Ganze, dann Zehntel, Hundertstel … (wie die Flächen im Quadrat)
-  const { ganze, nach } = ziffern(state.n);
-  const teile = [[0, ganze]];
-  nach.forEach((d, j) => teile.push([j + 1, d * 10 ** -(j + 1)]));
-  let start = 0;
-  const balkenH = 22, by = y0 - 14 - balkenH;
-  for (const [k, laenge] of teile) {
-    if (laenge > 0) {
-      ctx.fillStyle = FARBEN[k].flaeche;
-      ctx.fillRect(X(start), by, Math.max(1, laenge * S), balkenH);
-      // Trennlinien zwischen den einzelnen Teilen dieser Stufe (wenn sie groß genug sind)
-      const d = k === 0 ? 1 : 10 ** -k;
-      if (d * S >= 6) {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'; ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        for (let v = start + d; v < start + laenge - 1e-9; v += d) { ctx.moveTo(X(v), by); ctx.lineTo(X(v), by + balkenH); }
-        ctx.stroke();
-      }
-    }
-    start += laenge;
+  // Achse mit Pfeilspitze rechts
+  ctx.strokeStyle = '#1d2733'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(Math.max(-5, X(A) - 20), y0); ctx.lineTo(Math.min(W + 5, X(B) + 30), y0); ctx.stroke();
+  if (X(B) + 30 < W) {
+    ctx.fillStyle = '#1d2733';
+    ctx.beginPath(); ctx.moveTo(X(B) + 42, y0); ctx.lineTo(X(B) + 28, y0 - 7); ctx.lineTo(X(B) + 28, y0 + 7); ctx.fill();
   }
 
-  // Achse
-  ctx.strokeStyle = '#1d2733'; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(X(0) - 2, y0); ctx.lineTo(Math.min(W, X(state.quadrate) + 30), y0); ctx.stroke();
-  if (X(state.quadrate) + 30 < W) {           // Pfeilspitze am Ende
-    ctx.fillStyle = '#1d2733';
-    ctx.beginPath(); ctx.moveTo(X(state.quadrate) + 42, y0); ctx.lineTo(X(state.quadrate) + 28, y0 - 7); ctx.lineTo(X(state.quadrate) + 28, y0 + 7); ctx.fill();
+  // Strecke ab 0: zum angetippten Strich, sonst (per Knopf) zur eingegebenen Zahl
+  if (tippStrecke !== null) strecke(X, y0, tippStrecke);
+  else if (state.zeigeStrecke && !state.verdeckt) strecke(X, y0, state.n);
+
+  // Langsames Einblenden: Anteil 0 … 1 für die neue Stufe
+  let p = 1;
+  if (einblendung) {
+    p = Math.min(1, (now - einblendung.t0) / (EINBLENDEN_S * 1000));
+    if (p >= 1) einblendung = null; else anfordern();
   }
 
   // Striche: von fein nach grob; jede Stufe nur, wo es nicht schon einen gröberen Strich gibt
-  for (let k = STELLEN; k >= 0; k--) {
-    const a = deckkraft(k);
+  for (let k = state.skala; k >= 0; k--) {
+    const neu = einblendung && einblendung.k === k ? p * p * (3 - 2 * p) : 1;
+    const a = deckkraft(k) * neu;
     if (a <= 0) continue;
-    const d = 10 ** -k;
+    const d = 10 ** -k, laenge = STRICH[k] * neu;
     ctx.globalAlpha = a;
     ctx.strokeStyle = k === 0 ? '#1d2733' : FARBEN[k].schrift;
     ctx.lineWidth = LINIE[k];
@@ -118,55 +131,98 @@ function zeichnen() {
     for (let i = i0; i <= i1; i++) {
       if (k > 0 && i % 10 === 0) continue;   // dort steht ein gröberer Strich
       const x = X(i * d);
-      ctx.moveTo(x, y0 - STRICH[k]); ctx.lineTo(x, y0 + STRICH[k]);
+      ctx.moveTo(x, y0 - laenge); ctx.lineTo(x, y0 + laenge);
     }
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
 
-  // Beschriftung: Ganze immer, feinere Stufen, sobald Platz für die Zahlen ist
+  // Beschriftung: nur die ganzen Zahlen
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  for (let k = 0; k <= STELLEN; k++) {
-    const d = 10 ** -k;
-    const breite = (k + 3) * 11;              // grob geschätzte Breite der Beschriftung
-    if (k > 0 && d * S < breite + 8) break;
-    ctx.font = `${k === 0 ? 700 : 600} ${k === 0 ? 20 : 15}px system-ui, sans-serif`;
-    ctx.fillStyle = k === 0 ? '#1d2733' : FARBEN[k].schrift;
-    const i0 = Math.ceil(v0 / d - 1e-9), i1 = Math.floor(v1 / d + 1e-9);
-    for (let i = i0; i <= i1; i++) {
-      if (k > 0 && i % 10 === 0) continue;
-      const n = Math.round(i * d * EINHEIT);
-      ctx.fillText(alsText(n), X(i * d), y0 + STRICH[k] + 6);
-    }
+  ctx.font = '700 20px system-ui, sans-serif';
+  ctx.fillStyle = '#1d2733';
+  for (let i = Math.ceil(v0 - 1e-9); i <= Math.floor(v1 + 1e-9); i++) {
+    ctx.fillText(alsText(i * EINHEIT), X(i), y0 + STRICH[0] + 6);
   }
 
-  // Markierung der Zahl: Dreieck über dem Balken und Zahl
-  const xm = X(state.n / EINHEIT);
-  if (xm > -20 && xm < W + 20) {
-    ctx.fillStyle = '#c62828';
-    ctx.beginPath(); ctx.moveTo(xm, by - 2); ctx.lineTo(xm - 9, by - 16); ctx.lineTo(xm + 9, by - 16); ctx.fill();
-    ctx.strokeStyle = '#c62828'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(xm, by); ctx.lineTo(xm, y0 + 6); ctx.stroke();
-    ctx.font = '700 22px system-ui, sans-serif'; ctx.textBaseline = 'bottom';
-    ctx.fillText(alsText(state.n), xm, by - 18);
+  // Markierung der Zahl: Dreieck, Linie durch die Achse, Punkt und Zahl (als Bruch eingegeben: Bruch = Dezimalzahl)
+  const xm = X(state.n / EINHEIT), oben = y0 - STRICH[0] - 14;
+  if (!state.verdeckt && xm > -20 && xm < W + 20) {
+    ctx.fillStyle = ctx.strokeStyle = '#c62828';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(xm, oben); ctx.lineTo(xm, y0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xm, oben); ctx.lineTo(xm - 10, oben - 16); ctx.lineTo(xm + 10, oben - 16); ctx.fill();
+    ctx.beginPath(); ctx.arc(xm, y0, 6, 0, 2 * Math.PI); ctx.fill();
+    if (state.bruch) bruchBeschriftung(xm, oben - 20);
+    else {
+      ctx.font = '700 24px system-ui, sans-serif'; ctx.textBaseline = 'bottom';
+      ctx.fillText(alsText(state.n), xm, oben - 20);
+    }
   }
 
   if (kamera.s > passend().s * 1.6) uebersichtskarte(v0, v1);
 }
 
+// Beschriftung „3/4 = 0,75“ mit Bruchstrich, mittig über x, Unterkante bei y
+function bruchBeschriftung(x, y) {
+  const b = state.bruch, gross = '700 24px system-ui, sans-serif', klein = '700 20px system-ui, sans-serif';
+  const vor = (b.negativ ? MINUS : '') + (b.ganze ? b.ganze + ' ' : ''), nach = ' = ' + alsText(state.n);
+  ctx.font = gross;
+  const wVor = ctx.measureText(vor).width, wNach = ctx.measureText(nach).width;
+  ctx.font = klein;
+  const wBruch = Math.max(ctx.measureText(String(b.zaehler)).width, ctx.measureText(String(b.nenner)).width) + 6;
+  let x0 = x - (wVor + wBruch + wNach) / 2;
+  const mitte = y - 24;                      // Höhe des Bruchstrichs
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.font = gross;
+  ctx.fillText(vor, x0, mitte); x0 += wVor;
+  ctx.font = klein; ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom'; ctx.fillText(String(b.zaehler), x0 + wBruch / 2, mitte - 2);
+  ctx.textBaseline = 'top'; ctx.fillText(String(b.nenner), x0 + wBruch / 2, mitte + 3);
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x0, mitte); ctx.lineTo(x0 + wBruch, mitte); ctx.stroke();
+  x0 += wBruch;
+  ctx.font = gross; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(nach, x0, mitte);
+  ctx.textAlign = 'center';
+}
+
+// Zahl als dicke Strecke ab 0 entlang der Achse, je Stelle in ihrer Farbe (negative Zahlen nach links)
+function strecke(X, y0, n) {
+  const { ganze, nach, negativ } = ziffern(n);
+  const r = negativ ? -1 : 1;
+  ctx.lineWidth = 10; ctx.lineCap = 'butt';
+  let start = 0;
+  [ganze, ...nach].forEach((d, k) => {
+    if (d === 0) return;
+    const ende = start + r * d * 10 ** -k;
+    ctx.strokeStyle = FARBEN[k].schrift;
+    ctx.beginPath(); ctx.moveTo(X(start), y0); ctx.lineTo(X(ende), y0); ctx.stroke();
+    // kleine Lücke zwischen den einzelnen Teilen dieser Stelle (wenn sie groß genug sind)
+    const schritt = 10 ** -k * Math.abs(X(1) - X(0));
+    if (schritt >= 10 && d > 1) {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)'; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let i = 1; i < d; i++) { const x = X(start + r * i * 10 ** -k); ctx.moveTo(x, y0 - 5); ctx.lineTo(x, y0 + 5); }
+      ctx.stroke();
+      ctx.lineWidth = 10;
+    }
+    start = ende;
+  });
+}
+
 // Kleine Übersicht unten links: ganzer Zahlenstrahl, Rahmen um den sichtbaren Ausschnitt
 function uebersichtskarte(v0, v1) {
-  const b = 150, x0 = 18, y0 = H - 34, m = b / state.quadrate;
+  const b = 180, x0 = 18, y0 = H - 34, m = b / (B - A), X = v => x0 + (v - A) * m;
   ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
   ctx.fillRect(x0 - 8, y0 - 18, b + 16, 32);
-  ctx.fillStyle = FARBEN[1].flaeche;
-  ctx.fillRect(x0, y0 - 8, state.n / EINHEIT * m, 8);
   ctx.strokeStyle = '#1d2733'; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + b, y0);
-  for (let q = 0; q <= state.quadrate; q++) { ctx.moveTo(x0 + q * m, y0 - 6); ctx.lineTo(x0 + q * m, y0 + 6); }
+  for (let i = A; i <= B; i++) { ctx.moveTo(X(i), y0 - 6); ctx.lineTo(X(i), y0 + 6); }
   ctx.stroke();
+  ctx.fillStyle = '#c62828';
+  if (!state.verdeckt) { ctx.beginPath(); ctx.arc(X(state.n / EINHEIT), y0, 3.5, 0, 2 * Math.PI); ctx.fill(); }
   ctx.strokeStyle = '#d32f2f'; ctx.lineWidth = 2;
-  ctx.strokeRect(x0 + v0 * m, y0 - 14, Math.max(3, (v1 - v0) * m), 24);
+  ctx.strokeRect(X(v0), y0 - 14, Math.max(3, (v1 - v0) * m), 24);
 }
 
 function anfordern() { neuZeichnen = true; }
@@ -182,7 +238,7 @@ function schleife(now) {
     if (t >= 1) animation = null;
     neuZeichnen = true;
   }
-  if (neuZeichnen && W > 0) { neuZeichnen = false; zeichnen(); onAendern(); }
+  if (neuZeichnen && W > 0) { neuZeichnen = false; zeichnen(now); onAendern(); }
   requestAnimationFrame(schleife);
 }
 
@@ -192,15 +248,19 @@ let ziehen = null, pinch = null;
 
 function antippen(px) {
   const v = (px - kamera.ox) / kamera.s;
-  if (v < -0.02 * state.quadrate || v > state.quadrate * 1.02) return;
-  const k = feinsteStufe();
+  if (v < A - 0.1 || v > B + 0.1) return;
   if (state.lupe) {
-    if (k === STELLEN) uebersicht();
-    else { const a = Math.floor(v * 100) / 100; zeige(a, a + 0.01); }
+    // auf das angetippte Teil der nächstgröberen Stufe zoomen, sodass die eingestellte Einteilung sichtbar wird
+    if (!zuEng()) uebersicht();
+    else { const d = 10 ** -(state.skala - 1), a = Math.floor(v / d) * d; zeige(a, a + d); }
     return;
   }
-  const schritt = 10 ** (STELLEN - k);         // in Zehntausendsteln
-  state.setze(Math.round(v * EINHEIT / schritt) * schritt);
+  const d = 10 ** -feinsteStufe();
+  const n = Math.round(Math.round(v / d) * d * EINHEIT);
+  if (state.antippen) { state.setze(n); return; }   // per Knopf: Antippen markiert die Zahl
+  // sonst: nur eine Strecke ab 0 bis zum angetippten Strich (nochmal antippen: weg); die Zahl bleibt
+  tippStrecke = n === tippStrecke ? null : Math.max(A * EINHEIT, Math.min(B * EINHEIT, n));
+  anfordern();
 }
 
 cv.addEventListener('pointerdown', e => {
@@ -247,7 +307,9 @@ cv.addEventListener('wheel', e => {
 
 export function initStrahl(beiAenderung) {
   onAendern = beiAenderung;
+  state.beiAenderung(() => { tippStrecke = null; });   // neue Zahl: angetippte Strecke weg
   groesse();
   new ResizeObserver(() => { groesse(); if (W > 0) uebersicht(true); }).observe(cv);
+  new ResizeObserver(anfordern).observe(obenLeiste);
   requestAnimationFrame(schleife);
 }

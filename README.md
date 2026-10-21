@@ -15,15 +15,33 @@ Stufe in ihrer Farbe – passend zur Stellenwerttafel.
 ## Funktionen
 
 - **Darstellung:** Quadrat oder **Zahlenstrahl**. Zahl, Eingabe und Stellenwerttafel gelten für beide.
-  Auf dem Zahlenstrahl gibt es Striche für Ganze, Zehntel, Hundertstel, Tausendstel und Zehntausendstel
-  (feinere erst beim Hineinzoomen, mit Beschriftung, sobald Platz ist). Die Zahl erscheint als farbiger
-  Balken ab 0 – in denselben Stufenfarben wie die Flächen im Quadrat – und als Markierung. Antippen setzt
-  die Zahl auf den nächsten Strich der feinsten sichtbaren Stufe.
+- **Zahlenstrahl von −3 bis 3** zum Einführen der Dezimalbrüche: anfangs nur ganze Zahlen. Mit
+  „feiner +“ / „− gröber“ wird die Einteilung um eine Stufe verändert (Ganze → Zehntel → Hundertstel →
+  Tausendstel), jede Stufe in der Farbe der Stellenwerttafel. Sind die Striche zu eng, erscheinen sie erst
+  beim Hineinzoomen. Nur die ganzen Zahlen sind beschriftet. Beim Verfeinern wachsen die neuen
+  Striche langsam heraus; die Leiste E | z | h | t zeigt die eingestellte Einteilung. Antippen zeigt eine farbige Strecke von 0 bis zum nächsten Strich der feinsten
+  sichtbaren Stufe (nochmal antippen: weg), die eingegebene Zahl bleibt. Mit „Zahl durch Antippen markieren“
+  (anfangs aus) setzt Antippen stattdessen die Zahl auf diesen Strich; „Zahl als Strecke ab 0 zeigen“ (anfangs an) zeichnet die Zahl als dicke Strecke auf der Achse, jede Stelle in
+  ihrer Farbe (1,529: bis 1 in der Farbe der Ganzen, dann Zehntel bis 1,5, Hundertstel bis 1,52, Tausendstel
+  bis 1,529). Zahlen (auch negative, bis Tausendstel) lassen sich eingeben. Die Lupe zoomt so weit hinein, dass
+  die eingestellte Einteilung sichtbar wird.
 
-- **Zahl eingeben** (z. B. `0,347`, auch mit Punkt) → die Fläche wird gefärbt
+- **Zahl eingeben** (z. B. `0,347`, auch mit Punkt) → die Fläche wird gefärbt. Auch **Brüche** gehen:
+  `1/10`, `-3/4`, `1 1/2` – sie erscheinen in Bruchschreibweise mit Dezimalzahl (3/4 = 0,75), auch an der
+  Markierung auf dem Zahlenstrahl. Brüche ohne passende Dezimalzahl (1/3) werden abgelehnt.
+- **„Eingabe erst auf Knopfdruck markieren“** (Zahlenstrahl, anfangs an): Die eingegebene Zahl erscheint zunächst nur im
+  Bedienfeld („Wo liegt diese Zahl auf dem Zahlenstrahl?“; Dezimalzahl, Zerlegung und Stellenwerttafel
+  verdeckt). Erst „Auf dem Zahlenstrahl markieren“ zeigt Markierung und Strecke.
 - **Antippen** färbt bis einschließlich des angetippten Teils (feinste sichtbare Stufe); dasselbe Teil
   nochmal antippen nimmt es wieder weg
-- **Stellenwerttafel** (per Knopf ein- und ausblendbar, anfangs ausgeblendet) E | z | h | t | zt mit ▲/▼: ein Teil dieser Stufe dazu bzw. weg, mit Übertrag
+- **Zahl über dem Zahlenstrahl:** Die Zahl (bzw. der Bruch) steht am Zahlenstrahl auch direkt über dem Strahl,
+  links neben der Stellenwerttafel. Das Zahlfeld lässt sich mit Maus oder Finger frei verschieben
+  (Doppelklick: zurück an seinen Platz).
+- **Stellenwerttafel** – vorerst *frei*: Sie hat ihre eigene Zahl, unabhängig von der dargestellten. Ziffer antippen
+  und eintippen (springt zur nächsten Stelle), ▲/▼ mit Übertrag, ± schaltet das Vorzeichen um (Zahlenstrahl).
+  Mit `TAFEL_GEKOPPELT = true` in `js/bedienfeld.js` ist sie wieder an die dargestellte Zahl gekoppelt.
+  (per Knopf ein- und ausblendbar, anfangs ausgeblendet; am Zahlenstrahl direkt über dem
+  Strahl, mit Vorzeichenspalte und bis zu den Tausendsteln) E | z | h | t | zt mit ▲/▼: ein Teil dieser Stufe dazu bzw. weg, mit Übertrag
   (0,09 + 0,01 = 0,1)
 - **Zerlegung**: „= 3 Zehntel + 4 Hundertstel + 7 Tausendstel = 347 Tausendstel“
 - **1, 2 oder 3 Quadrate** (Zahlen bis 3)
@@ -51,7 +69,7 @@ Stufe in ihrer Farbe – passend zur Stellenwerttafel.
 │   ├── zahl.js        # Zahl (in Zehntausendsteln), Einlesen, Text, Einteilung, Antippen (ohne Zeichnen, testbar)
 │   ├── state.js       # Zustand, Farben der Stellenwerte
 │   ├── ansicht.js     # Quadrat: Zeichenfläche, Zoom, Verschieben, Antippen, Übersichtskarte
-│   ├── strahl.js      # Zahlenstrahl: Striche, Balken, Zoom, Verschieben, Antippen, Übersichtskarte
+│   ├── strahl.js      # Zahlenstrahl −3 … 3: Einteilung, Markierung, Zoom, Verschieben, Antippen, Übersichtskarte
 │   └── bedienfeld.js  # Zahlanzeige, Eingabe, Stellenwerttafel, Anzahl der Quadrate
 ├── tests/zahl.test.mjs
 └── package.json
