@@ -263,27 +263,54 @@ function antippen(px) {
   anfordern();
 }
 
+// Zwei-Finger-Zoom: Abstand der Finger (in jeder Richtung) bestimmt die Vergrößerung, die Stelle zwischen
+// ihnen bleibt unter den Fingern
+function pinchStart(a, b) {
+  pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, s: kamera.s, mx: (a.x + b.x) / 2, ox: kamera.ox };
+}
+function pinchBewegen(a, b) {
+  const d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2;
+  const s = Math.min(sMax(), Math.max(sMin(), pinch.s * d / pinch.d));
+  const wx = (pinch.mx - pinch.ox) / pinch.s;
+  Object.assign(kamera, begrenzen({ s, ox: mx - wx * s }));
+  anfordern();
+}
+
+// Zwei-Finger-Zoom auf Touch-Geräten über Touch-Events: In Safari (iPad) zuverlässiger als Pointer-Events,
+// und preventDefault verhindert, dass stattdessen die ganze Seite zoomt. Ohne Touch (Maus): über Pointer-Events.
+const TOUCH = 'ontouchstart' in window;
+const touchPunkte = e => {
+  const r = cv.getBoundingClientRect();
+  return [...e.touches].slice(0, 2).map(t => ({ x: t.clientX - r.left, y: t.clientY - r.top }));
+};
+cv.addEventListener('touchstart', e => {
+  if (e.touches.length < 2) return;
+  e.preventDefault();
+  animation = null; ziehen = null;
+  pinchStart(...touchPunkte(e));
+}, { passive: false });
+cv.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (pinch && e.touches.length >= 2) pinchBewegen(...touchPunkte(e));
+}, { passive: false });
+cv.addEventListener('touchend', e => { if (e.touches.length < 2) pinch = null; });
+cv.addEventListener('touchcancel', () => { pinch = null; });
+
 cv.addEventListener('pointerdown', e => {
   cv.setPointerCapture(e.pointerId);
   zeiger.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
   animation = null;
   if (zeiger.size === 1) ziehen = { x: e.offsetX, ox: kamera.ox, bewegt: false };
   if (zeiger.size === 2) {
-    const [a, b] = [...zeiger.values()];
-    pinch = { d: Math.abs(a.x - b.x) || 1, s: kamera.s, mx: (a.x + b.x) / 2, ox: kamera.ox };
+    if (!TOUCH) pinchStart(...zeiger.values());
     ziehen = null;
   }
 });
 cv.addEventListener('pointermove', e => {
   if (!zeiger.has(e.pointerId)) return;
   zeiger.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
-  if (pinch && zeiger.size === 2) {
-    const [a, b] = [...zeiger.values()];
-    const d = Math.abs(a.x - b.x) || 1, mx = (a.x + b.x) / 2;
-    const s = Math.min(sMax(), Math.max(sMin(), pinch.s * d / pinch.d));
-    const wx = (pinch.mx - pinch.ox) / pinch.s;
-    Object.assign(kamera, begrenzen({ s, ox: mx - wx * s }));
-    anfordern();
+  if (zeiger.size >= 2) {
+    if (pinch && !TOUCH) pinchBewegen(...zeiger.values());
   } else if (ziehen) {
     const dx = e.offsetX - ziehen.x;
     if (Math.abs(dx) > 6) ziehen.bewegt = true;
@@ -294,12 +321,12 @@ function loslassen(e) {
   if (!zeiger.has(e.pointerId)) return;
   if (ziehen && !ziehen.bewegt && zeiger.size === 1) antippen(e.offsetX);
   zeiger.delete(e.pointerId);
-  if (zeiger.size < 2) pinch = null;
+  if (zeiger.size < 2 && !TOUCH) pinch = null;     // Touch: endet über touchend
   if (zeiger.size === 0) ziehen = null;
   else if (zeiger.size === 1) { const [p] = [...zeiger.values()]; ziehen = { x: p.x, ox: kamera.ox, bewegt: true }; }
 }
 cv.addEventListener('pointerup', loslassen);
-cv.addEventListener('pointercancel', e => { zeiger.delete(e.pointerId); ziehen = pinch = null; });
+cv.addEventListener('pointercancel', e => { zeiger.delete(e.pointerId); ziehen = null; if (!TOUCH) pinch = null; });
 cv.addEventListener('wheel', e => {
   e.preventDefault();
   zoom(Math.exp(-(e.deltaY || e.deltaX) * 0.0015), e.offsetX, 0, false);

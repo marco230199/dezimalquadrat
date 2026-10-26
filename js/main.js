@@ -10,4 +10,5 @@ initStrahl(() => sichtbarkeit());
 initBedienfeld();
 
 // iPad / Safari: Zoomen der ganzen Seite mit zwei Fingern verhindern (der Zahlenstrahl zoomt selbst)
-for (const t of ['gesturestart', 'gesturechange']) document.addEventListener(t, e => e.preventDefault());
+for (const t of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(t, e => e.preventDefault());
+document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
